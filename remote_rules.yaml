@@ -20,7 +20,7 @@
         max_alt: 5000
 
       actions:
-        note: "rhv"
+        note: "e16"
         callback: "prox_cb"
     
     haf:
@@ -87,3 +87,14 @@
     #   actions:
     #     note: "sjc"
     #     callback: "prox_cb"
+
+    # sfo:
+    #   conditions:
+    #     latlongring: [5, 37.6188056,-122.3754167]
+    #     proximity: [2800, 3]
+    #     min_alt: 300
+
+    #   actions:
+    #     note: "sfo"
+    #     callback: "prox_cb"
+

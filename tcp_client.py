@@ -15,8 +15,8 @@ LOW_FREQ_DELAY = 60
 API_RATE_LIMIT = 1
 DEACTIVATE_SECS = 30 # no callback in this amount of time = deactivate the airport
 EXPIRE_SECS = 31 # expire aircraft not seen in this many seconds
-INNER_PROX_THRESH = .3
-INNER_PROX_ALT = 400 # TODO
+INNER_PROX_THRESH = .5
+INNER_PROX_ALT = 500
 OUTFILE = "/tmp/output_events.txt"   # matching events go here
 ALL_DATA_OUT = "/tmp/all_data.json"  # place to save all received data, for reproducibility
 
@@ -118,7 +118,7 @@ class MonitorThread:
             start_loop_time = time.time()
 
             ret = self.check_all_airports()
-            if not ret:
+            if ret <= 1:        # didn't sleep in check_all_airports()
                 time.sleep(1)
 
     def check_all_airports(self):

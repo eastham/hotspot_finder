@@ -78,6 +78,27 @@
         note: "mev"
         callback: "prox_cb" 
 
+    dvt:
+      conditions:
+        latlongring: [7, 33.6883056,-112.0825556]
+        proximity: [800, 1.5]
+        min_alt: 1800
+        max_alt: 7000
+
+      actions:
+        note: "dvt"
+        callback: "prox_cb"
+
+    tfd:
+      conditions:
+        latlongring: [20, 32.8858544, -111.9087344]
+        proximity: [800, 1.5]
+        min_alt: 2000
+        max_alt: 7000
+
+      actions:
+        note: "tfd"
+        callback: "prox_cb"
     # sjc:
     #   conditions:
     #     latlongring: [5, 37.3629947,-121.9286206]

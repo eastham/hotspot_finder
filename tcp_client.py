@@ -155,7 +155,7 @@ class MonitorThread:
         self.activate_airport(airport)
 
         flight_dist = abs(flight.lastloc - flight2.lastloc)
-        flight_alt_delta = abs(flight.lastloc.alt - flight2.lastloc.alt)
+        flight_alt_delta = abs(flight.lastloc.alt_baro - flight2.lastloc.alt_baro)
 
         if flight_dist < INNER_PROX_THRESH and flight_alt_delta < INNER_PROX_ALT:
             print(f"*** below inner thresh range {airport}: {flight_dist}nm, "

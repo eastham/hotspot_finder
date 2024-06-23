@@ -29,8 +29,9 @@ def get_link(df, index):
 
 def main():
     #     map_airport = ["wvi", 36.9357325, -121.7896375]
-    map_airport = ["o69", 38.2577933, -122.6053236]
-
+    # map_airport = ["o69", 38.2577933, -122.6053236]
+    # map_airport = ["haf", 37.5134444,-122.5011667]
+    map_airport = ["cvh", 36.8933475, -121.4102736]
     if len(sys.argv) != 2:
         print(f"Usage: {sys.argv[0]} <input-file>")
         sys.exit(1)

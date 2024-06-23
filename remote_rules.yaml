@@ -4,18 +4,20 @@
     wvi:
       conditions:
         latlongring: [5, 36.9357325, -121.7896375]
-        proximity: [2800, 1.5]
+        proximity: [800, 1.5]
         min_alt: 300
+        max_alt: 5000
 
       actions:
         note: "wvi"
         callback: "prox_cb"
     
-    rhv:
+    e16:
       conditions:
-        latlongring: [3, 37.332, -121.819]
+        latlongring: [3, 37.0815833,-121.5968056]
         proximity: [800, 1.5]
-        min_alt: 300
+        min_alt: 500
+        max_alt: 5000
 
       actions:
         note: "rhv"
@@ -26,6 +28,7 @@
         latlongring: [5, 37.5134444,-122.5011667]
         proximity: [800, 1.5]
         min_alt: 300
+        max_alt: 5000
 
       actions:
         note: "haf"
@@ -36,6 +39,7 @@
         latlongring: [5, 38.2577933,-122.6053236]
         proximity: [800, 1.5]
         min_alt: 300
+        max_alt: 5000
 
       actions:
         note: "o69"
@@ -46,6 +50,7 @@
         latlongring: [5, 36.8933475,-121.4102736]
         proximity: [800, 1.5]
         min_alt: 300
+        max_alt: 5000
 
       actions:
         note: "cvh"
@@ -56,6 +61,7 @@
         latlongring: [5, 37.8284444,-121.6258333]
         proximity: [800, 1.5]
         min_alt: 300
+        max_alt: 5000
 
       actions:
         note: "c83"
@@ -65,11 +71,13 @@
       conditions:
         latlongring: [5, 39.0005000,-119.7511111]
         proximity: [800, 1.5]
-        min_alt: 300
+        min_alt: 5000
+        max_alt: 10000
 
       actions:
         note: "mev"
         callback: "prox_cb" 
+
     # sjc:
     #   conditions:
     #     latlongring: [5, 37.3629947,-121.9286206]

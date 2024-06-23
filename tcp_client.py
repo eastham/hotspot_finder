@@ -1,6 +1,5 @@
 
 import argparse
-import copy
 import signal
 import time
 import sys
@@ -14,23 +13,27 @@ from adsb_actions.adsbactions import AdsbActions
 
 LOW_FREQ_DELAY = 60
 API_RATE_LIMIT = 1
-DEACTIVATE_SECS = 30 # no callback in this amount of time = deactivate
-INNER_PROX_THRESH = .5
-OUTFILE = "/tmp/output_events.txt"
+DEACTIVATE_SECS = 30 # no callback in this amount of time = deactivate the airport
+EXPIRE_SECS = 31 # expire aircraft not seen in this many seconds
+INNER_PROX_THRESH = .3
+INNER_PROX_ALT = 400 # TODO
+OUTFILE = "/tmp/output_events.txt"   # matching events go here
+ALL_DATA_OUT = "/tmp/all_data.json"  # place to save all received data, for reproducibility
 
 class AirportState:
-    def __init__(self, name, latlongring, adsb_actions):
+    def __init__(self, name, latlongring, adsb_actions, logfile):
         self.name = name
         self.latlongring = latlongring
         self.active = False
         self.last_checked = 0
         self.last_activated = 0
         self.adsb_actions = adsb_actions
+        self.logfile = logfile
 
     def testfun(self):
         print("in testfun")
 
-    def get_api_data(self):
+    def call_api_and_process(self):
         print(f"Doing API query for for {self.name}")
 
         url = f"https://api.airplanes.live/v2/point/{self.latlongring[1]}/{self.latlongring[2]}/{self.latlongring[0]}"
@@ -52,6 +55,7 @@ class AirportState:
             line['now'] = json_data['now'] / 1000
             json_list += json.dumps(line) + "\n"
 
+        self.logfile.write(json_list)
         self.adsb_actions.loop(string_data=json_list)
         self.last_checked = time.time()
 
@@ -89,13 +93,14 @@ class MonitorThread:
         print("Dumping all events:")
         self.dump_events()
         self.event_file.close()
+        list(self.airports.values())[0].logfile.close()
         sys.exit(0)
 
-    def add_airport(self, name, latlongring):
+    def add_airport(self, name, latlongring, logfile):
         print(f"Adding {name}")
         with self.airports_lock:
             self.airports[name] = AirportState(name, latlongring,
-                                               self.adsb_actions)
+                                               self.adsb_actions, logfile)
 
     def activate_airport(self, name):
         # print(f"Activating {name}")
@@ -129,11 +134,11 @@ class MonitorThread:
                 if airport.last_activated + DEACTIVATE_SECS < time.time():
                     self.deactivate_airport(airport.name)
                     continue
-                airport.get_api_data()
+                airport.call_api_and_process()
                 query_ctr += 1
             else:
                 if time.time() - airport.last_checked > LOW_FREQ_DELAY:
-                    airport.get_api_data()
+                    airport.call_api_and_process()
                     query_ctr += 1
                     print("low freq check done")
         print(f"Done checking all, {len(self.event_dict)} events stored")
@@ -150,8 +155,11 @@ class MonitorThread:
         self.activate_airport(airport)
 
         flight_dist = abs(flight.lastloc - flight2.lastloc)
-        if flight_dist < INNER_PROX_THRESH:
-            print(f"*** below thresh range {airport}: {flight_dist}nm, {flight.to_str()}, {flight2.to_str()}")
+        flight_alt_delta = abs(flight.lastloc.alt - flight2.lastloc.alt)
+
+        if flight_dist < INNER_PROX_THRESH and flight_alt_delta < INNER_PROX_ALT:
+            print(f"*** below inner thresh range {airport}: {flight_dist}nm, "
+                  f"{flight.to_str()}, {flight2.to_str()}")
             event = Event(flight, flight2, airport)
             self.event_dict[flight.lastloc.now] = event
             self.event_file.write(f"{event.to_str()}\n")
@@ -174,19 +182,26 @@ if __name__ == "__main__":
             print(exc)
             sys.exit(-1)
 
-    adsb_actions = AdsbActions(yaml_data=yaml_data)
+    # open logfile for all data
+    all_data_file = open(ALL_DATA_OUT, "w")
+
+    # set up processing environment
+    adsb_actions = AdsbActions(yaml_data=yaml_data, expire_secs=EXPIRE_SECS)
     monitor_thread = MonitorThread(adsb_actions)
+
     signal.signal(signal.SIGINT, monitor_thread.handle_exit)
 
     # register callback
     adsb_actions.register_callback("prox_cb",
                                    monitor_thread.prox_callback)
 
+    # read in airport details to monitor
     try:
         for rulename, rulebody in yaml_data['rules'].items():
             if rulebody['conditions']['latlongring']:
                 monitor_thread.add_airport(rulename,
-                                           rulebody['conditions']['latlongring'])
+                                           rulebody['conditions']['latlongring'],
+                                           all_data_file)
     except Exception as ex:      # pylint: disable=broad-except
         print("Error in yaml file: " + str(ex))
 

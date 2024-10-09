@@ -11,7 +11,7 @@ import requests
 from adsb_actions.adsbactions import AdsbActions
 
 logger = logging.getLogger(__name__)
-logger.level = logging.DEBUG
+logger.level = logging.INFO
 
 LOW_FREQ_DELAY = 60  # 250 kts head-on closure over 60 sec = 4 nm. 40 kts = .6 nm
 API_RATE_LIMIT = 1 # seconds between API queries
@@ -150,7 +150,7 @@ class MonitorThread:
                     airport.call_api_and_process()
                     query_ctr += 1
                     logger.debug("low freq check done")
-        logger.info(
+        logger.debug(
             f"Done checking all, {len(self.event_dict)} events stored")
         return query_ctr
 

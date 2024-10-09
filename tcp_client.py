@@ -17,8 +17,8 @@ LOW_FREQ_DELAY = 60  # 250 kts head-on closure over 60 sec = 4 nm. 40 kts = .6 n
 API_RATE_LIMIT = 1 # seconds between API queries
 DEACTIVATE_SECS = 30 # no callback in this amount of time = deactivate the airport
 EXPIRE_SECS = 31 # expire aircraft not seen in this many seconds
-INNER_PROX_THRESH = 2.5
-INNER_PROX_ALT = 2500
+INNER_PROX_THRESH = .5
+INNER_PROX_ALT = 500
 OUTFILE = "/tmp/output_events.txt"   # matching events go here
 ALL_DATA_OUT = "/tmp/all_data.json"  # place to save all received data, for reproducibility
 

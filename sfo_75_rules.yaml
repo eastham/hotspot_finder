@@ -1,0 +1,13 @@
+  config:
+  
+  rules:
+    sfo:
+      conditions:
+        latlongring: [75, 37.621313, -122.378955]
+        proximity: [2800, 5]
+        min_alt: 2000  # 2000 feet above ground level (13 feet elevation)
+        max_alt: 5000  # 5000 feet above ground level (13 feet elevation)
+
+      actions:
+        note: "sfo"
+        callback: "prox_cb"

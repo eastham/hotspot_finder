@@ -1,4 +1,3 @@
-
 import argparse
 import signal
 import time
@@ -8,19 +7,18 @@ import logging
 import json
 import yaml
 import requests
-import logging
 
 from adsb_actions.adsbactions import AdsbActions
 
 logger = logging.getLogger(__name__)
 logger.level = logging.DEBUG
 
-LOW_FREQ_DELAY = 60
-API_RATE_LIMIT = 1
+LOW_FREQ_DELAY = 60  # 250 kts head-on closure over 60 sec = 4 nm. 40 kts = .6 nm
+API_RATE_LIMIT = 1 # seconds between API queries
 DEACTIVATE_SECS = 30 # no callback in this amount of time = deactivate the airport
 EXPIRE_SECS = 31 # expire aircraft not seen in this many seconds
-INNER_PROX_THRESH = .5
-INNER_PROX_ALT = 500
+INNER_PROX_THRESH = 2.5
+INNER_PROX_ALT = 2500
 OUTFILE = "/tmp/output_events.txt"   # matching events go here
 ALL_DATA_OUT = "/tmp/all_data.json"  # place to save all received data, for reproducibility
 
@@ -38,6 +36,8 @@ class AirportState:
         logger.debug(f"Doing API query for for {self.name}")
 
         url = f"https://api.airplanes.live/v2/point/{self.latlongring[1]}/{self.latlongring[2]}/{self.latlongring[0]}"
+
+        start_time = time.time()
 
         # Issue query
         try:
@@ -58,7 +58,10 @@ class AirportState:
 
         self.logfile.write(json_list)
         self.adsb_actions.loop(string_data=json_list)
-        self.last_checked = time.time()
+        self.last_checked = done_time = time.time()
+
+        if (done_time - start_time) < API_RATE_LIMIT:
+            time.sleep(API_RATE_LIMIT - (done_time - start_time))
 
 class Event:
     def __init__(self, flight1, flight2, airport):
@@ -82,8 +85,10 @@ class MonitorThread:
         self.event_dict = {}
         self.event_file = open(OUTFILE, "w")
         self.event_file.write("log start at " + str(time.time()) + "\n")
+        self.thread_running = False
 
     def run(self):
+        self.thread_running = True
         self.monitor_thread.start()
 
     def dump_events(self):
@@ -104,12 +109,18 @@ class MonitorThread:
                                                self.adsb_actions, logfile)
 
     def activate_airport(self, name):
+        if not self.thread_running:     # XXX hack
+            return
+
         # print(f"Activating {name}")
         with self.airports_lock:
             self.airports[name].active = True
             self.airports[name].last_activated = time.time()
 
     def deactivate_airport(self, name):
+        if not self.thread_running:
+            return
+
         logger.info(f"Deactivating {name}")
         with self.airports_lock:
             self.airports[name].active = False
@@ -119,7 +130,7 @@ class MonitorThread:
             start_loop_time = time.time()
 
             ret = self.check_all_airports()
-            if ret <= 1:        # didn't sleep in check_all_airports()
+            if ret == 0:        # didn't sleep in check_all_airports()
                 time.sleep(1)
 
     def check_all_airports(self):
@@ -128,9 +139,6 @@ class MonitorThread:
         query_ctr = 0
 
         for airport in self.airports.values():
-            if query_ctr > 0:
-                time.sleep(API_RATE_LIMIT)
-
             if airport.active:
                 if airport.last_activated + DEACTIVATE_SECS < time.time():
                     self.deactivate_airport(airport.name)
@@ -161,11 +169,22 @@ class MonitorThread:
         flight_alt_delta = abs(flight.lastloc.alt_baro - flight2.lastloc.alt_baro)
 
         if flight_dist < INNER_PROX_THRESH and flight_alt_delta < INNER_PROX_ALT:
+            has_logged = flight.flags.get('logged', False)
+            if has_logged:
+                logger.info(f"*** already logged {airport}: {flight_dist}nm, "
+                      f"{flight.to_str()}, {flight2.to_str()}")
+                return
+            flight.flags['logged'] = True
             logger.info(f"*** below inner thresh range {airport}: {flight_dist}nm, "
                   f"{flight.to_str()}, {flight2.to_str()}")
             event = Event(flight, flight2, airport)
             self.event_dict[flight.lastloc.now] = event
             self.event_file.write(f"{event.to_str()}\n")
+
+def generate_dicts_from_file(file_path):
+    with open(file_path, "r") as file:
+        for line in file:
+            yield json.loads(line)
 
 if __name__ == "__main__":
     logging.basicConfig(
@@ -174,6 +193,8 @@ if __name__ == "__main__":
     # get yaml path from command line
     parser = argparse.ArgumentParser()
     parser.add_argument("yaml_path", help="Path to yaml file")
+    parser.add_argument(
+        "--data_file", type=str, help="Path to pre-recorded data file", required=False)
     args = parser.parse_args()
     yaml_path = args.yaml_path
 
@@ -189,7 +210,8 @@ if __name__ == "__main__":
     all_data_file = open(ALL_DATA_OUT, "w")
 
     # set up processing environment
-    adsb_actions = AdsbActions(yaml_data=yaml_data, expire_secs=EXPIRE_SECS)
+    adsb_actions = AdsbActions(yaml_data=yaml_data, expire_secs=EXPIRE_SECS,
+                               pedantic=True)
     monitor_thread = MonitorThread(adsb_actions)
 
     signal.signal(signal.SIGINT, monitor_thread.handle_exit)
@@ -198,15 +220,20 @@ if __name__ == "__main__":
     adsb_actions.register_callback("prox_cb",
                                    monitor_thread.prox_callback)
 
-    # read in airport details to monitor
-    try:
-        for rulename, rulebody in yaml_data['rules'].items():
-            if rulebody['conditions']['latlongring']:
-                monitor_thread.add_airport(rulename,
-                                           rulebody['conditions']['latlongring'],
-                                           all_data_file)
-    except Exception as ex:      # pylint: disable=broad-except
-        logger.error("error in yaml file: " + str(ex))
+    if args.data_file:
+        # just read in data from file, no threading needed
+        iterator = generate_dicts_from_file(args.data_file)
+        adsb_actions.loop(iterator_data=iterator)
+    else:
+        # read in airport details to monitor
+        try:
+            for rulename, rulebody in yaml_data['rules'].items():
+                if rulebody['conditions']['latlongring']:
+                    monitor_thread.add_airport(rulename,
+                                            rulebody['conditions']['latlongring'],
+                                            all_data_file)
+        except Exception as ex:      # pylint: disable=broad-except
+            logger.error("error in yaml file: " + str(ex))
 
-    # start monitoring thread
-    monitor_thread.run()
+        # start monitoring thread
+        monitor_thread.run()
